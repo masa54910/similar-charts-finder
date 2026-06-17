@@ -1,0 +1,428 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --text: #1d1d1f;
+  --sub: #6e6e73;
+  --line: #d8d8de;
+  --panel: #ffffff;
+  --blue: #0071e3;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background: linear-gradient(#fbfbfd, #f5f5f7 320px, #ffffff 100%);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.topbar {
+  height: 54px;
+  padding: 0 40px;
+  border-bottom: 1px solid #e4e4e7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,255,255,.82);
+  backdrop-filter: blur(22px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 21px;
+}
+
+.apple {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #111;
+  color: #111;
+}
+
+nav {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+  font-size: 14px;
+}
+
+nav button {
+  border: 0;
+  color: #fff;
+  background: #050505;
+  border-radius: 9px;
+  padding: 12px 24px;
+  font-weight: 700;
+}
+
+.hero {
+  text-align: center;
+  padding: 54px 16px 22px;
+}
+
+.hero h1 {
+  font-size: clamp(38px, 5vw, 58px);
+  line-height: 1.03;
+  letter-spacing: -0.055em;
+  font-weight: 600;
+  margin: 0;
+}
+
+.hero p {
+  margin: 18px 0 0;
+  color: #4b5563;
+  font-size: 16px;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 280px minmax(680px, 1fr) 420px;
+  gap: 16px;
+  padding: 0 24px 22px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 18px 45px rgba(0,0,0,.06);
+}
+
+.sidebar,
+.results {
+  padding: 22px 18px;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+h2 {
+  font-size: 20px;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+
+.selectLike {
+  height: 42px;
+  border: 1px solid #d7d7dd;
+  border-radius: 8px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.timeframes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.timeframes button {
+  border: 1px solid #d7d7dd;
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px 16px;
+}
+
+.timeframes .active {
+  background: #050505;
+  color: #fff;
+  border-color: #050505;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.row h3 {
+  margin: 0;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: #111;
+}
+
+.primary,
+.secondary {
+  width: 100%;
+  border-radius: 8px;
+  padding: 13px 16px;
+  font-weight: 700;
+}
+
+.primary {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(#191919, #000000);
+}
+
+.secondary {
+  background: #fff;
+  border: 1px solid #d7d7dd;
+}
+
+.emaBox {
+  padding-top: 16px;
+  border-top: 1px solid #ececef;
+}
+
+.legend,
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.legend {
+  gap: 28px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.legendItem {
+  margin-top: 14px;
+  font-size: 14px;
+}
+
+.legend i,
+.legendItem i {
+  display: inline-block;
+  width: 30px;
+  height: 4px;
+  border-radius: 999px;
+}
+
+.chartPanel {
+  padding: 26px;
+}
+
+.panelHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.chartButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.chartButtons button,
+.modalHead button {
+  border: 1px solid #d7d7dd;
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 700;
+}
+
+.chartScroll {
+  margin-top: 24px;
+  overflow: auto;
+  max-height: 650px;
+  border-radius: 12px;
+  border: 1px solid #e2e5ea;
+  background: #f9fbff;
+  cursor: grab;
+}
+
+.chartScroll.dragging {
+  cursor: grabbing;
+}
+
+.chartStage {
+  width: 1180px;
+  height: 760px;
+  position: relative;
+  background: linear-gradient(#ffffff, #f6f9ff);
+  overflow: hidden;
+}
+
+.chartStage canvas {
+  display: block;
+  width: 1180px;
+  height: 760px;
+}
+
+.chartTitle {
+  position: absolute;
+  left: 24px;
+  top: 20px;
+  font-weight: 700;
+  color: #344054;
+}
+
+.priceTag {
+  position: absolute;
+  right: 0;
+  top: 300px;
+  background: #2563ff;
+  color: #fff;
+  padding: 6px 10px;
+  font-weight: 800;
+}
+
+.chartNote {
+  margin-top: 18px;
+  color: #6b7280;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.chartNote em {
+  margin-left: auto;
+  font-style: normal;
+}
+
+.resultItem {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid #ececef;
+  background: transparent;
+  display: grid;
+  grid-template-columns: 42px 120px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 18px 0;
+  text-align: left;
+}
+
+.resultItem:hover {
+  background: #f8f8fa;
+}
+
+.rank {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #111;
+  background: rgba(229, 231, 235, 0.62);
+  font-weight: 800;
+}
+
+.resultText b,
+.resultText small,
+.resultText strong {
+  display: block;
+}
+
+.resultText b {
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.resultText small {
+  color: #4b5563;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.resultText strong {
+  color: var(--blue);
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.mini-chart {
+  width: 100%;
+  height: 92px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+footer {
+  display: flex;
+  justify-content: center;
+  gap: 90px;
+  color: #8a8f98;
+  font-size: 14px;
+  padding: 22px 18px 38px;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.72);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modalCard {
+  width: min(96vw, 1520px);
+  max-height: 94vh;
+  overflow: hidden;
+  background: #fff;
+  border-radius: 18px;
+  padding: 20px;
+}
+
+.modalHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.modalHead p {
+  margin: 6px 0 0;
+  color: #6b7280;
+}
+
+.modalChartScroll {
+  overflow: auto;
+  max-height: 78vh;
+  border: 1px solid #e2e5ea;
+  border-radius: 12px;
+  background: #f9fbff;
+}
+
+.modalChartScroll canvas {
+  display: block;
+}
+
+@media (max-width: 1200px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+
+  nav a {
+    display: none;
+  }
+
+  footer {
+    display: none;
+  }
+}
