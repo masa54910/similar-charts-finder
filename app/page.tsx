@@ -158,6 +158,7 @@ function formatTimeLabel(rawTime: string, fallbackIndex: number) {
 
     return `${month}/${day} ${hour}:${minute}`;
   }
+  
 
   const dateTimeMatch = trimmed.match(
     /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})[ T](\d{1,2}):(\d{2})/
@@ -181,6 +182,40 @@ function formatTimeLabel(rawTime: string, fallbackIndex: number) {
   }
 
   return trimmed.slice(0, 16);
+}
+function toTimeMs(rawTime?: string) {
+  if (!rawTime) return NaN;
+
+  const normalized = rawTime.trim().replace(/\//g, "-").replace(" ", "T");
+  return new Date(normalized).getTime();
+}
+
+function parseTargetDateTime(input: string) {
+  if (!input.trim()) return null;
+
+  const normalized = input.trim().replace(/\//g, "-").replace(" ", "T");
+  const ms = new Date(normalized).getTime();
+
+  return Number.isNaN(ms) ? NaN : ms;
+}
+
+function findEndIndexByDateTime(candles: Candle[], input: string) {
+  const targetMs = parseTargetDateTime(input);
+
+  if (targetMs === null) return candles.length - 1;
+  if (Number.isNaN(targetMs)) return -1;
+
+  let found = -1;
+
+  for (let i = 0; i < candles.length; i += 1) {
+    const ms = toTimeMs(candles[i].time);
+
+    if (Number.isNaN(ms)) continue;
+    if (ms <= targetMs) found = i;
+    if (ms > targetMs) break;
+  }
+
+  return found;
 }
 function drawChart(
   context: CanvasRenderingContext2D,
@@ -386,21 +421,34 @@ export default function Home() {
   const [selected, setSelected] = useState<ResultItem | null>(null);
   const [flipSelected, setFlipSelected] = useState(false);
   const [overlayResult, setOverlayResult] = useState<ResultItem | null>(null);
+  const [targetDateTime, setTargetDateTime] = useState("");
+const [targetError, setTargetError] = useState("");
 
   const tfLabel = timeframe === "60" ? "1時間足" : `${timeframe}分足`;
 
   useEffect(() => {
-    async function loadCsv() {
-      const res = await fetch("/data/usdjpy-1m.csv");
-      const text = await res.text();
-      const parsed = parseCsv(text);
+  async function loadUsdJpy() {
+    const res = await fetch("/api/usdjpy");
 
-      setAllCandles(parsed);
-      setCandles(parsed.slice(-300));
-    }
+    const json = await res.json();
 
-    loadCsv();
-  }, []);
+    const parsed: Candle[] = json.candles.map((c: any, index: number) => ({
+  time: c.datetime ?? c.time ?? c.date ?? `api index ${index}`,
+  open: Number(c.open),
+  high: Number(c.high),
+  low: Number(c.low),
+  close: Number(c.close),
+}));
+console.log("最初のローソク足:", parsed[0]);
+console.log("最後のローソク足:", parsed[parsed.length - 1]);
+    console.log("取得したローソク足の本数:", parsed.length);
+
+    setAllCandles(parsed);
+    setCandles(parsed.slice(-300));
+  }
+
+  loadUsdJpy();
+}, []);
 
   useEffect(() => {
     const canvas = chartRef.current;
@@ -471,31 +519,61 @@ export default function Home() {
   }
 
   function changeTimeframe(next: string) {
-    setTimeframe(next);
+  setTimeframe(next);
+  setTargetError("");
 
-    if (!allCandles.length) return;
+  if (!allCandles.length) return;
 
-    const minutes = next === "60" ? 60 : Number(next);
-    const sampled = resampleCandles(allCandles, minutes);
-
-    setCandles(sampled.slice(-300));
-  }
-
-  function search() {
-  const minutes = timeframe === "60" ? 60 : Number(timeframe);
+  const minutes = next === "60" ? 60 : Number(next);
   const sampled = resampleCandles(allCandles, minutes);
-  const windowSize = 300;
-  const futureSize = 120;
 
-  if (sampled.length < windowSize + futureSize + 1) {
-    setResults([]);
+  const endIndex = findEndIndexByDateTime(sampled, targetDateTime);
+
+  if (endIndex < 0) {
+    setTargetError("指定日時が見つかりません。形式を確認してください。");
     setCandles(sampled.slice(-300));
     return;
   }
 
-  const target = sampled.slice(-windowSize);
-  const searchable = sampled.slice(0, sampled.length - windowSize - futureSize);
-  const windows = generateWindows(searchable, windowSize);
+  setCandles(sampled.slice(Math.max(0, endIndex - 299), endIndex + 1));
+}
+
+  function search() {
+  const minutes = timeframe === "60" ? 60 : Number(timeframe);
+const sampled = resampleCandles(allCandles, minutes);
+const windowSize = 300;
+const futureSize = 120;
+
+setTargetError("");
+
+const targetEndIndex = findEndIndexByDateTime(sampled, targetDateTime);
+
+if (targetEndIndex < 0) {
+  setResults([]);
+  setTargetError("指定日時が見つかりません。例：2026-06-18 01:27");
+  return;
+}
+
+const targetStartIndex = targetEndIndex - windowSize + 1;
+
+if (targetStartIndex < 0) {
+  setResults([]);
+  setTargetError("指定日時より前のローソク足が300本未満です。");
+  return;
+}
+
+const target = sampled.slice(targetStartIndex, targetEndIndex + 1);
+
+// 指定日時より前だけを検索対象にする
+const searchable = sampled.slice(0, targetStartIndex);
+const windows = generateWindows(searchable, windowSize);
+
+if (windows.length === 0) {
+  setResults([]);
+  setCandles(target);
+  setTargetError("指定日時より前に比較できる過去データが足りません。");
+  return;
+}
 
   const targetClose = target.map((c) => c.close);
   const targetHigh = target.map((c) => c.high);
@@ -705,7 +783,16 @@ const ranked = deduped.map((item, index) => ({
               <span>⌄</span>
             </div>
           </section>
-
+<section>
+  <h3>指定日時</h3>
+  <input
+    className="dateInput"
+    value={targetDateTime}
+    onChange={(e) => setTargetDateTime(e.target.value)}
+    placeholder="例：2026-06-18 01:27"
+  />
+  {targetError && <p className="errorText">{targetError}</p>}
+</section>
           <button className="primary" onClick={search}>
             類似パターンを検索
           </button>
