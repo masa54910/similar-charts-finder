@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { generateWindows } from "../src/windowGenerator";
+import { normalize } from "../src/normalize";
+import {
+  calculateSimilarity,
+  type SimilarityOptions,
+} from "../src/similarity";
 
 type Candle = {
   time?: string;
@@ -15,6 +21,10 @@ type ResultItem = {
   tf: string;
   date: string;
   score: number;
+  start: number;
+  end: number;
+  candles: Candle[];
+  future: Candle[];
 };
 
 const EMA = [
@@ -24,13 +34,7 @@ const EMA = [
   { period: 600, color: "#ff2c25", label: "EMA 600" },
 ];
 
-const RESULTS: ResultItem[] = [
-  { rank: 1, tf: "5分足", date: "2024/05/24 15:37", score: 92 },
-  { rank: 2, tf: "15分足", date: "2024/04/03 10:42", score: 89 },
-  { rank: 3, tf: "30分足", date: "2024/03/18 14:15", score: 86 },
-  { rank: 4, tf: "1時間足", date: "2024/02/28 11:08", score: 84 },
-  { rank: 5, tf: "1分足", date: "2024/01/30 09:55", score: 83 },
-];
+
 
 function calcEma(values: number[], period: number) {
   const k = 2 / (period + 1);
@@ -117,13 +121,74 @@ function makeFuture(start: Candle, n = 90, seed = 2) {
 
   return arr;
 }
+function flipCandles(candles: Candle[]): Candle[] {
+  if (!candles.length) return [];
 
+  const prices = candles.flatMap((c) => [c.open, c.high, c.low, c.close]);
+  const max = Math.max(...prices);
+  const min = Math.min(...prices);
+  const center = (max + min) / 2;
+
+  return candles.map((c) => {
+    const open = center * 2 - c.open;
+    const close = center * 2 - c.close;
+    const high = center * 2 - c.low;
+    const low = center * 2 - c.high;
+
+    return {
+      ...c,
+      open,
+      high,
+      low,
+      close,
+    };
+  });
+}
+function formatTimeLabel(rawTime: string, fallbackIndex: number) {
+  if (!rawTime) return `#${fallbackIndex}`;
+
+  const trimmed = rawTime.trim();
+
+  const isoDate = new Date(trimmed);
+  if (!Number.isNaN(isoDate.getTime())) {
+    const month = String(isoDate.getMonth() + 1).padStart(2, "0");
+    const day = String(isoDate.getDate()).padStart(2, "0");
+    const hour = String(isoDate.getHours()).padStart(2, "0");
+    const minute = String(isoDate.getMinutes()).padStart(2, "0");
+
+    return `${month}/${day} ${hour}:${minute}`;
+  }
+
+  const dateTimeMatch = trimmed.match(
+    /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})[ T](\d{1,2}):(\d{2})/
+  );
+
+  if (dateTimeMatch) {
+    const [, , month, day, hour, minute] = dateTimeMatch;
+
+    return `${month.padStart(2, "0")}/${day.padStart(2, "0")} ${hour.padStart(
+      2,
+      "0"
+    )}:${minute}`;
+  }
+
+  const timeOnlyMatch = trimmed.match(/^(\d{1,2}):(\d{2})/);
+
+  if (timeOnlyMatch) {
+    const [, hour, minute] = timeOnlyMatch;
+
+    return `${hour.padStart(2, "0")}:${minute}`;
+  }
+
+  return trimmed.slice(0, 16);
+}
 function drawChart(
   context: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
   current: Candle[],
   future: Candle[] = [],
-  title = ""
+  title = "",
+  overlay: Candle[] = []
 ) {
   if (!current.length) return;
 
@@ -218,6 +283,32 @@ function drawChart(
     context.strokeStyle = line.color;
     context.lineWidth = 2.35;
     context.beginPath();
+      if (overlay.length) {
+    const baseFirst = current[0].close;
+    const overlayFirst = overlay[0].close;
+
+    const adjusted = overlay.map((c) => {
+      const ratio = c.close / overlayFirst;
+      return baseFirst * ratio;
+    });
+
+    context.strokeStyle = "rgba(0, 0, 0, 0.45)";
+    context.lineWidth = 3;
+    context.setLineDash([8, 6]);
+    context.beginPath();
+
+    adjusted.slice(0, current.length).forEach((v, i) => {
+      if (i === 0) context.moveTo(x(i), y(v));
+      else context.lineTo(x(i), y(v));
+    });
+
+    context.stroke();
+    context.setLineDash([]);
+
+    context.fillStyle = "rgba(0, 0, 0, 0.75)";
+    context.font = "700 14px -apple-system, BlinkMacSystemFont, Segoe UI";
+    context.fillText("過去パターン重ね表示", padL + 12, padT + 22);
+  }
 
     e.forEach((v, i) => {
       if (i === 0) context.moveTo(x(i), y(v));
@@ -266,21 +357,19 @@ function drawChart(
 
   context.fillStyle = "#1f2937";
 
-  [
-    "21:00",
-    "23:00",
-    "01:00",
-    "03:00",
-    "05:00",
-    "07:00",
-    "09:00",
-    "11:00",
-    "13:00",
-    "15:00",
-    "17:00",
-  ].forEach((t, i) => {
-    context.fillText(t, padL + (i * plotW) / 10 - 8, height - 22);
-  });
+    const labelSource = [...current, ...future];
+  const labelCount = 7;
+
+  for (let i = 0; i < labelCount; i += 1) {
+    const index = Math.round(
+      (i * (labelSource.length - 1)) / Math.max(1, labelCount - 1)
+    );
+
+    const rawTime = labelSource[index]?.time ?? "";
+    const label = formatTimeLabel(rawTime, index);
+
+    context.fillText(label, x(index) - 28, height - 22);
+  }
 }
 
 export default function Home() {
@@ -291,9 +380,12 @@ export default function Home() {
 
   const [allCandles, setAllCandles] = useState<Candle[]>([]);
   const [candles, setCandles] = useState<Candle[]>([]);
+  const [results, setResults] = useState<ResultItem[]>([]);
   const [timeframe, setTimeframe] = useState("1");
   const [zoom, setZoomState] = useState(1);
   const [selected, setSelected] = useState<ResultItem | null>(null);
+  const [flipSelected, setFlipSelected] = useState(false);
+  const [overlayResult, setOverlayResult] = useState<ResultItem | null>(null);
 
   const tfLabel = timeframe === "60" ? "1時間足" : `${timeframe}分足`;
 
@@ -317,26 +409,42 @@ export default function Home() {
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    drawChart(context, canvas, candles);
-  }, [candles]);
+    drawChart(
+  context,
+  canvas,
+  candles,
+  [],
+  "",
+  overlayResult?.candles ?? []
+);
+  }, [candles, overlayResult]);
 
   useEffect(() => {
-    if (!selected || !bigChartRef.current || !candles.length) return;
+  if (!selected || !bigChartRef.current) return;
 
-    const current = candles.slice(-220);
-    const future = makeFuture(current[current.length - 1], 90, selected.rank * 7);
-    const context = bigChartRef.current.getContext("2d");
+  const context = bigChartRef.current.getContext("2d");
+  if (!context) return;
 
-    if (!context) return;
+  let current = selected.candles;
+  let future = selected.future;
 
-    drawChart(
-      context,
-      bigChartRef.current,
-      current,
-      future,
-      `類似${selected.rank}位　${selected.tf}　類似度 ${selected.score}%　未来予測＋EMA4本`
-    );
-  }, [selected, candles]);
+  if (flipSelected) {
+    const combined = flipCandles([...selected.candles, ...selected.future]);
+
+    current = combined.slice(0, selected.candles.length);
+    future = combined.slice(selected.candles.length);
+  }
+
+  drawChart(
+    context,
+    bigChartRef.current,
+    current,
+    future,
+    `類似${selected.rank}位　${selected.tf}　類似度 ${selected.score}%　${
+      flipSelected ? "上下反転表示" : "過去局面＋実際の未来120本"
+    }`
+  );
+}, [selected, flipSelected]);
 
   function setZoom(next: number) {
     const old = zoom;
@@ -374,8 +482,106 @@ export default function Home() {
   }
 
   function search() {
-    changeTimeframe(timeframe);
+  const minutes = timeframe === "60" ? 60 : Number(timeframe);
+  const sampled = resampleCandles(allCandles, minutes);
+  const windowSize = 300;
+  const futureSize = 120;
+
+  if (sampled.length < windowSize + futureSize + 1) {
+    setResults([]);
+    setCandles(sampled.slice(-300));
+    return;
   }
+
+  const target = sampled.slice(-windowSize);
+  const searchable = sampled.slice(0, sampled.length - windowSize - futureSize);
+  const windows = generateWindows(searchable, windowSize);
+
+  const targetClose = target.map((c) => c.close);
+  const targetHigh = target.map((c) => c.high);
+  const targetLow = target.map((c) => c.low);
+
+  const targetFeatures = {
+    ema25: normalize(calcEma(targetClose, 25)),
+    ema75: normalize(calcEma(targetClose, 75)),
+    ema200: normalize(calcEma(targetClose, 200)),
+    ema600: normalize(calcEma(targetClose, 600)),
+    close: normalize(targetClose),
+    high: normalize(targetHigh),
+    low: normalize(targetLow),
+  };
+
+  const options: SimilarityOptions = {
+    useEMA25: true,
+    useEMA75: true,
+    useEMA200: true,
+    useEMA600: false,
+    useClose: true,
+    useHigh: true,
+    useLow: true,
+  };
+
+  const weights = Array.from({ length: windowSize }, (_, i) => {
+    if (i >= windowSize - 50) return 3;
+    if (i >= windowSize - 100) return 2;
+    return 1;
+  });
+
+  const scored = windows
+  .map((w) => {
+    const close = w.data.map((c) => c.close);
+    const high = w.data.map((c) => c.high);
+    const low = w.data.map((c) => c.low);
+
+    const sampleFeatures = {
+      ema25: normalize(calcEma(close, 25)),
+      ema75: normalize(calcEma(close, 75)),
+      ema200: normalize(calcEma(close, 200)),
+      ema600: normalize(calcEma(close, 600)),
+      close: normalize(close),
+      high: normalize(high),
+      low: normalize(low),
+    };
+
+    const score =
+      calculateSimilarity(targetFeatures, sampleFeatures, options, weights) *
+      100;
+
+    return {
+      rank: 0,
+      tf: timeframe === "60" ? "1時間足" : `${timeframe}分足`,
+      date: w.data[0].time ?? `index ${w.start}`,
+      score: Math.round(score * 10) / 10,
+      start: w.start,
+      end: w.end,
+      candles: w.data,
+      future: sampled.slice(w.end + 1, w.end + 1 + futureSize),
+    };
+  })
+  .sort((a, b) => b.score - a.score);
+
+const deduped: ResultItem[] = [];
+
+for (const item of scored) {
+  const overlaps = deduped.some((picked) => {
+    return item.start <= picked.end && item.end >= picked.start;
+  });
+
+  if (!overlaps) {
+    deduped.push(item);
+  }
+
+  if (deduped.length >= 5) break;
+}
+
+const ranked = deduped.map((item, index) => ({
+  ...item,
+  rank: index + 1,
+}));
+
+  setCandles(target);
+  setResults(ranked);
+}
 
   useEffect(() => {
     const scroll = scrollRef.current;
@@ -504,9 +710,15 @@ export default function Home() {
             類似パターンを検索
           </button>
 
-          <button className="secondary" onClick={() => setZoom(1)}>
-            設定をリセット
-          </button>
+          <button
+  className="secondary"
+  onClick={() => {
+    setZoom(1);
+    setOverlayResult(null);
+  }}
+>
+  設定をリセット
+</button>
 
           <section className="emaBox">
             <h3>EMA設定</h3>
@@ -569,12 +781,19 @@ export default function Home() {
             <h2>類似パターン（上位5件）</h2>
             <span>ⓘ</span>
           </div>
-
-          {RESULTS.map((item) => (
+{results.length === 0 && (
+  <div className="emptyResult">
+    類似検索を実行すると、ここに上位5件が表示されます。
+  </div>
+)}
+          {results.map((item) => (
             <button
               className="resultItem"
               key={item.rank}
-              onClick={() => setSelected(item)}
+              onClick={() => {
+  setFlipSelected(false);
+  setSelected(item);
+}}
             >
               <span className="rank">{item.rank}</span>
 
@@ -586,6 +805,16 @@ export default function Home() {
               </span>
 
               <span className="miniPlaceholder">未来</span>
+
+<span
+  className="miniPlaceholder"
+  onClick={(e) => {
+    e.stopPropagation();
+    setOverlayResult(item);
+  }}
+>
+  重ねる
+</span>
             </button>
           ))}
         </aside>
@@ -610,7 +839,15 @@ export default function Home() {
                 </p>
               </div>
 
-              <button onClick={() => setSelected(null)}>閉じる</button>
+              <div style={{ display: "flex", gap: 10 }}>
+  {selected.score < 0 && (
+    <button onClick={() => setFlipSelected((v) => !v)}>
+      {flipSelected ? "通常表示" : "上下反転"}
+    </button>
+  )}
+
+  <button onClick={() => setSelected(null)}>閉じる</button>
+</div>
             </div>
 
             <div className="modalChartScroll">
